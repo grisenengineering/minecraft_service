@@ -1,0 +1,76 @@
+#! /bin/sh
+### BEGIN INIT INFO
+# Provides:          minecraft
+# Required-Start:    $remote_fs $network
+# Required-Stop:     $remote_fs
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Minecraft daemon for minecraft server
+# Description: Minecraft daemon for minecraft server
+### END INIT INFO
+
+NAME=minecraft
+MINECRAFT_PATH=/home/minecraft/
+MINECRAFT_EXECUTABLE=spigot-1.12.jar
+MINECRAFT_SESSION="minecraft-session"
+
+BACKUP_PATH=/home/minecraft/backup/
+BACKUP_PREFIX="world_backup_"
+
+# Load the VERBOSE setting and other rcS variables
+[ -f /etc/default/rcS ] && . /etc/default/rcS
+
+case "$1" in
+  start)
+        echo "Starting Minecraft server"
+        su - minecraft -c "screen -d -m -S ${MINECRAFT_SESSION} java -jar ${MINECRAFT_PATH}${MINECRAFT_EXECUTABLE} nogui"
+  ;;
+  stop)
+        echo "Stopping Minecraft server"
+        #su - minecraft -c "screen -p 0 -S minecraft-session -X eval 'stuff stop\015'"
+        su - minecraft -c "screen -p 0 -S minecraft-session -X stuff 'stop^M'"
+  ;;
+  status)
+        stat=`su - minecraft -c "screen -list" | grep ${MINECRAFT_SESSION}`
+        if [ -z "${stat}" ];
+        then
+                echo "Server Stopped"
+                exit 1
+        else
+                echo "Server Running"
+        fi
+  ;;
+  restart|force-reload)
+    $0 stop
+        sleep 3
+    $0 start
+  ;;
+  backup)
+        echo "Running Backup"
+        echo "Warning players 30 seconds"
+        su - minecraft -c "screen -p 0 -S ${MINECRAFT_SESSION} -X stuff 'say Warning backup will run in 30 seconds, server will shut down for about one minute^M'"
+        sleep 25
+        echo "Warning players 5 seconds"
+        su - minecraft -c "screen -p 0 -S ${MINECRAFT_SESSION} -X stuff 'say Warning backup will run now, server will shut down for about one minute^M'"
+        sleep 5
+        # Stopping server
+        su - minecraft -c "screen -p 0 -S minecraft-session -X stuff 'stop^M'"
+        sleep 10
+        stat=`su - minecraft -c "screen -list" | grep ${MINECRAFT_SESSION}`
+        if [ -z "${stat}" ];
+        then
+                echo "Server Stopped"
+        else
+                echo "ERROR: Server still running can't do backup!"
+                exit 1
+        fi
+        tar -czf ${BACKUP_PATH}${BACKUP_PREFIX}$(date +%Y%m%d%H%M).tar.gz ${MINECRAFT_PATH}/world ${MINECRAFT_PATH}/world_nether ${MINECRAFT_PATH}/world_the_end
+        $0 start
+  ;;
+  *)
+    echo "Usage: minecraft {start|stop|restart|status|backup}" >&2
+    exit 1
+  ;;
+
+esac
+        
